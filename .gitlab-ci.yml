@@ -1,0 +1,25 @@
+stages: - build - test 
+variables: 
+DOCKER_DRIVER: overlay2 
+
+# Step 1: Build Docker image 
+build_image: 
+stage: build 
+image: docker:latest 
+services: 
+  - docker:dind 
+script: 
+  - echo "Building Docker image..." - docker build -t userdetails:latest . 
+only: 
+  - main 
+
+# Step 2: Test Docker image 
+test_image: 
+stage: test 
+image: docker:latest 
+services: 
+  - docker:dind 
+script: 
+  - echo "Testing Docker image..." - docker run -d -p 8081:8081 --name userdetails 
+userdetails:latest - sleep 10 - docker ps | grep userdetails - docker stop userdetails - docker rm userdetails only: 
+  - main 
