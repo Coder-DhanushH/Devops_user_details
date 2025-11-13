@@ -33,6 +33,6 @@ deploy:
   script:
     - docker build -t userdetails:latest .
     - docker rm -f userdetails || true
-    - docker run -d --name userdetails -p 8081:8080 userdetails:latest
+    - docker run -d --name userdetails -p 8001:8001 userdetails:latest
   only:
     - main
