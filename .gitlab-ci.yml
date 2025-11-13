@@ -1,25 +1,38 @@
-stages: - build - test 
-variables: 
-DOCKER_DRIVER: overlay2 
+stages:
+  - build
+  - test
+  - deploy
 
-# Step 1: Build Docker image 
-build_image: 
-stage: build 
-image: docker:latest 
-services: 
-  - docker:dind 
-script: 
-  - echo "Building Docker image..." - docker build -t userdetails:latest . 
-only: 
-  - main 
+build:
+  stage: build
+  image: maven:3.9.9-eclipse-temurin-17
+  script:
+    - mvn clean package -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+    expire_in: 1 day
+  only:
+    - main
 
-# Step 2: Test Docker image 
-test_image: 
-stage: test 
-image: docker:latest 
-services: 
-  - docker:dind 
-script: 
-  - echo "Testing Docker image..." - docker run -d -p 8081:8081 --name userdetails 
-userdetails:latest - sleep 10 - docker ps | grep userdetails - docker stop userdetails - docker rm userdetails only: 
-  - main 
+test:
+  stage: test
+  image: maven:3.9.9-eclipse-temurin-17
+  script:
+    - mvn test
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  image: docker:20.10
+  services:
+    - docker:dind
+  before_script:
+    - apk add --no-cache docker-compose
+  script:
+    - docker build -t userserver:latest .
+    - docker rm -f userserver || true
+    - docker run -d --name userserver -p 8081:8080 userserver:latest
+  only:
+    - main
