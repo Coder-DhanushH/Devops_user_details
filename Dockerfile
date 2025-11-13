@@ -1,5 +1,5 @@
 #use lightweight JDK 17 base image
-FROM eclipse-temurin:21-jdk-slim
+FROM eclipse-temurin:21-jre
 
 # Set the working directory
 WORKDIR /app
