@@ -25,11 +25,11 @@ test:
 
 deploy:
   stage: deploy
-  image: docker:20.10
+  image: docker:latest
   services:
     - docker:dind
-  before_script:
-    - apk add --no-cache docker-compose
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
   script:
     - docker build -t userdetails:latest .
     - docker rm -f userdetails || true
