@@ -3,6 +3,7 @@ stages:
   - test
   - docker_build
   - docker_test
+  - deploy
 
 variables:
   IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
@@ -37,9 +38,11 @@ docker_build:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    # Build & push the image
     - docker build -t $IMAGE_TAG .
     - docker push $IMAGE_TAG
+    # Tag and push as latest for deployment
+    - docker tag $IMAGE_TAG $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:latest
   only:
     - main
   needs:
@@ -55,12 +58,45 @@ docker_test:
   script:
     - docker pull $IMAGE_TAG
     - docker run -d --name test_container -p 8001:8001 $IMAGE_TAG
-    - sleep 60
+    - |
+      echo "Waiting for application to start..."
+      for i in $(seq 1 30); do
+        if docker exec test_container curl -f http://localhost:8001/user/details 2>/dev/null; then
+          echo "✓ Application is healthy!"
+          break
+        fi
+        echo "Attempt $i/30: Waiting for application..."
+        sleep 5
+      done
+    - echo "=== Container Logs ==="
     - docker logs test_container
-    - docker exec test_container curl -f http://localhost:8001/user/details || echo "Health check failed"
-    - docker stop test_container
-    - docker rm test_container
+    - echo "=== Final Health Check ==="
+    - docker exec test_container curl -v http://localhost:8001/user/details
+  after_script:
+    - docker stop test_container || true
+    - docker rm test_container || true
   only:
     - main
   needs:
     - docker_build
+
+deploy:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE:latest
+    - docker rm -f userdetails || true
+    - docker run -d --name userdetails -p 8001:8001 --restart unless-stopped $CI_REGISTRY_IMAGE:latest
+    - echo "Waiting for deployment..."
+    - sleep 15
+    - docker logs userdetails
+    - echo "=== Verifying deployment ==="
+    - docker ps | grep userdetails
+  only:
+    - main
+  needs:
+    - docker_test
