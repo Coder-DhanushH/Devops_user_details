@@ -1,7 +1,13 @@
 stages:
   - build
   - test
-  - deploy
+  - docker_build
+  - docker_test
+
+variables:
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
 
 build:
   stage: build
@@ -23,16 +29,38 @@ test:
   only:
     - main
 
-deploy:
-  stage: deploy
+docker_build:
+  stage: docker_build
   image: docker:latest
   services:
     - docker:dind
-  variables:
-    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    - docker build -t userdetails:latest .
-    - docker rm -f userdetails || true
-    - docker run -d --name userdetails -p 8001:8001 userdetails:latest
+    # Build & push the image
+    - docker build -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
   only:
     - main
+  needs:
+    - build
+
+docker_test:
+  stage: docker_test
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker pull $IMAGE_TAG
+    - docker run -d --name test_container -p 8001:8001 $IMAGE_TAG
+    - sleep 30
+    - docker logs test_container
+    - docker exec test_container curl -f http://localhost:8001/user/details || echo "Health check failed"
+    - docker stop test_container
+    - docker rm test_container
+  only:
+    - main
+  needs:
+    - docker_build
