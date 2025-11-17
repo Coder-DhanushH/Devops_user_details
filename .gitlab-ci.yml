@@ -58,7 +58,7 @@ docker_test:
   script:
     - docker pull $IMAGE_TAG
     - docker run -d --name test_container -p 8001:8001 $IMAGE_TAG
-    - |
+    - | 
       echo "Waiting for application to start..."
       for i in $(seq 1 30); do
         if docker exec test_container curl -f http://localhost:8001/user/details 2>/dev/null; then
